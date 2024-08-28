@@ -10,6 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -18,14 +20,25 @@ import org.springframework.stereotype.Service;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
-public class UserService implements UserDetailsService {
+public class UserServiceImpl implements UserDetailsService {
 
     @Autowired
     private UserRepository userRepository;
 
+    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
+
+
+    public String createUser(UserDTO usersDTO) {
+
+        Users user = convertToEntity(usersDTO);
+        user.setPassword(encoder.encode(user.getPassword()));
+        Users savedUser = userRepository.save(user);
+
+        return "User added successfully with ID: " + savedUser.getId();
+
+    }
     public Page<UserDTO> getAllUsers(Pageable pageable) {
         return userRepository
                 .findAll(pageable)

@@ -10,7 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 @Service
-public class CategoryService {
+public class CategoryServiceImpl {
 
     @Autowired
     private CategoryRepository categoryRepository;

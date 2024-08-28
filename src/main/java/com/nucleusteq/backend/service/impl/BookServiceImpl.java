@@ -9,10 +9,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
-import java.util.stream.Collectors;
-
 @Service
-public class BookService {
+public class BookServiceImpl {
 
     @Autowired
     private BookRepository bookRepository;
