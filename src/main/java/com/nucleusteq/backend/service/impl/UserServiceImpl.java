@@ -1,20 +1,28 @@
-package com.nucleusteq.backend.service;
+package com.nucleusteq.backend.service.impl;
 
+import com.nucleusteq.backend.dto.ResponseDTO;
 import com.nucleusteq.backend.dto.UserDTO;
+import com.nucleusteq.backend.dto.UserOutDTO;
 import com.nucleusteq.backend.entity.Users;
+import com.nucleusteq.backend.exception.ResourceNotFoundException;
+import com.nucleusteq.backend.exception.ResourceAlreadyExistsException;
+import com.nucleusteq.backend.mapper.UserMapper;
 import com.nucleusteq.backend.repository.UserRepository;
+import com.nucleusteq.backend.service.ISMSService;
+import com.nucleusteq.backend.service.IUserService;
+import com.nucleusteq.backend.utils.PasswordGenerator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
@@ -22,123 +30,162 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
-public class UserServiceImpl implements UserDetailsService {
+public class UserServiceImpl implements IUserService, UserDetailsService {
 
     @Autowired
     private UserRepository userRepository;
 
-    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
+    @Autowired
+    private UserMapper userMapper;
 
+    @Autowired
+    private ISMSService ismsService;
+    public UserServiceImpl(ISMSService ismsService) {
+        this.ismsService = ismsService;
+    }
 
-    public String createUser(UserDTO usersDTO) {
+    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
-        Users user = convertToEntity(usersDTO);
+    @Override
+    public String createUser(UserDTO userDTO) {
+        if (userRepository.findByEmail(userDTO.getEmail()).isPresent() ||
+                userRepository.findByNumber(userDTO.getNumber()).isPresent()) {
+            throw new ResourceAlreadyExistsException("User with this email or phone number already exists.");
+        }
+
+        Users user = userMapper.toUser(userDTO);
         user.setPassword(encoder.encode(user.getPassword()));
         Users savedUser = userRepository.save(user);
 
         return "User added successfully with ID: " + savedUser.getId();
-
-    }
-    public Page<UserDTO> getAllUsers(Pageable pageable) {
-        return userRepository
-                .findAll(pageable)
-                .map(this::convertToDTO);
-
     }
 
-    public ResponseEntity<UserDTO> getUserById(int id) {
-        return userRepository.findById(id)
-                .map(user -> ResponseEntity.ok(convertToDTO(user)))
-                .orElse(ResponseEntity.notFound().build());
+    @Override
+    public Page<UserOutDTO> getAllUsers(int page, int size, String search, String role) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+        Page<Users> users;
+
+        if (search != null && !search.isEmpty() && role != null && !role.isEmpty()) {
+            users = userRepository.findByNameContainingIgnoreCaseAndRole(search, role, pageable);
+        } else if (search != null && !search.isEmpty()) {
+            users = userRepository.findByNameContainingIgnoreCase(search, pageable);
+        } else if (role != null && !role.isEmpty()) {
+            users = userRepository.findByRole(role, pageable);
+        } else {
+            users = userRepository.findAll(pageable);
+        }
+
+        return users.map(userMapper::toUserOutDTO);
     }
 
-    public ResponseEntity<UserDTO> addUser(UserDTO userDTO) {
-        Users user = convertToEntity(userDTO);
-        System.out.println(userDTO.getPassword());
+    @Override
+    public ResponseEntity<UserOutDTO> getUserById(int id) {
+        Users user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "ID", String.valueOf(id)));
+        return ResponseEntity.ok(userMapper.toUserOutDTO(user));
+    }
+
+    @Override
+    public ResponseEntity<ResponseDTO> addUser(UserDTO userDTO) {
+        Optional<Users> userWithSameNumber = userRepository.findByNumber(userDTO.getNumber());
+        Optional<Users> userWithSameEmail = userRepository.findByEmail(userDTO.getEmail());
+
+        if (userWithSameNumber.isPresent() || userWithSameEmail.isPresent()) {
+            throw new ResourceAlreadyExistsException("User with this email or phone number already exists.");
+        }
+
+        Users user = userMapper.toUser(userDTO);
+        String randomPassword = PasswordGenerator.generatePassword(10);
+        user.setPassword(encoder.encode(randomPassword));
         Users savedUser = userRepository.save(user);
-        return ResponseEntity.ok(convertToDTO(savedUser));
+
+        String message = String.format("\nWelcome %s\n" +
+                        "Registered Successfully! Welcome to ShelfHive\n" +
+                        "These are your login credentials\n" +
+                        "Username: %s (OR) %s\n" +
+                        "Password: %s",
+                savedUser.getName(),
+                savedUser.getNumber(),
+                savedUser.getEmail(),
+                randomPassword);
+
+        System.out.println("SMS from Registration " +message);
+        // ismsService.sendSms(savedUser.getNumber(), message);
+
+        String ResponseMessage = "User '" + savedUser.getName() + "' registered successfully";
+        ResponseDTO response = new ResponseDTO("success", ResponseMessage);
+
+        return ResponseEntity.ok(response);
     }
 
-    public ResponseEntity<UserDTO> updateUser(int id, UserDTO userDTO) {
-        return userRepository.findById(id)
-                .map(existingUser -> {
-                    existingUser.setName(userDTO.getName());
-                    existingUser.setNumber(userDTO.getNumber());
-                    existingUser.setRole(userDTO.getRole());
-                    existingUser.setEmail(userDTO.getEmail());
+    @Override
+    public ResponseEntity<ResponseDTO> updateUser(int id, UserDTO userDTO) {
+        Users existingUser = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "ID", String.valueOf(id)));
 
-                    existingUser.setPassword(userDTO.getPassword());
-                    userRepository.save(existingUser);
-                    return ResponseEntity.ok(convertToDTO(existingUser));
-                })
-                .orElse(ResponseEntity.notFound().build());
+
+        existingUser.setName(userDTO.getName());
+        existingUser.setNumber(userDTO.getNumber());
+        existingUser.setRole(userDTO.getRole());
+        existingUser.setEmail(userDTO.getEmail());
+
+        if (userDTO.getPassword() != null && !userDTO.getPassword().isEmpty()) {
+            existingUser.setPassword(encoder.encode(userDTO.getPassword()));
+        }
+
+        userRepository.save(existingUser);
+
+        String message = "User '" + existingUser.getName() + "' updated successfully";
+        ResponseDTO response = new ResponseDTO("success", message);
+
+        return ResponseEntity.ok(response);
     }
 
-    public ResponseEntity<Object> deleteUser(int id) {
-        return userRepository.findById(id)
-                .map(user -> {
-                    userRepository.delete(user);
-                    return ResponseEntity.ok().build();
-                })
-                .orElse(ResponseEntity.notFound().build());
+
+    @Override
+    public ResponseEntity<ResponseDTO> deleteUser(int id) {
+        Users user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "ID", String.valueOf(id)));
+        userRepository.delete(user);
+
+        String message = "User '" + user.getName() + "' deleted successfully";
+        ResponseDTO response = new ResponseDTO("success", message);
+
+        return ResponseEntity.ok(response);
     }
 
-    private UserDTO convertToDTO(Users user) {
-        UserDTO userDTO = new UserDTO();
-        userDTO.setId(user.getId());
-        userDTO.setName(user.getName());
-        userDTO.setNumber(user.getNumber());
-        userDTO.setRole(user.getRole());
-        userDTO.setEmail(user.getEmail());
-        userDTO.setPassword(user.getPassword());
-        return userDTO;
-    }
     @Override
     public UserDetails loadUserByUsername(String usernameOrPhoneNumber) throws UsernameNotFoundException {
-
         Optional<Users> userOptional;
 
-        if(usernameOrPhoneNumber.contains("@")) {
+        if (usernameOrPhoneNumber.contains("@")) {
             userOptional = userRepository.findByEmail(usernameOrPhoneNumber);
-        }
-        else {
+        } else {
             userOptional = userRepository.findByNumber(usernameOrPhoneNumber);
         }
-        Users userInfo = userOptional
+
+        Users user = userOptional
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with identifier: " + usernameOrPhoneNumber));
 
-//        List<GrantedAuthority> authorities = userInfo.getRole().stream()
-//                .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName()))
-//                .collect(Collectors.toList());
+        List<GrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority(user.getRole()));
 
-        List<GrantedAuthority> grantedAuthorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_"+userInfo.getRole()));
-
-        return new User(userInfo.getEmail(), userInfo.getPassword(), grantedAuthorities);
+        return new org.springframework.security.core.userdetails.User(user.getEmail(), user.getPassword(), authorities);
     }
-    public Users getByUserName(String name) {
-        Users user;
-        if (name.contains("@")) {
-//            email
-            user = userRepository.findByEmail(name).orElseThrow(
-                    () -> new UsernameNotFoundException("User not found for " + name)
-            );
-        } else {
-//            mobile
-            user = userRepository.findByNumber(name).orElseThrow(
-                    () -> new UsernameNotFoundException("User not found for " + name)
-            );
-        }
 
-        return user;
+    public Users getByUserName(String username) {
+        Optional<Users> userOptional = username.contains("@")
+                ? userRepository.findByEmail(username)
+                : userRepository.findByNumber(username);
+
+        return userOptional
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with identifier: " + username));
     }
-    private Users convertToEntity(UserDTO userDTO) {
-        Users user = new Users();
-        user.setId(userDTO.getId());
-        user.setName(userDTO.getName());
-        user.setNumber(userDTO.getNumber());
-        user.setRole(userDTO.getRole());
-        user.setEmail(userDTO.getEmail());
-        user.setPassword(userDTO.getPassword());
-        return user;
+
+    @Override
+    public Page<UserOutDTO> searchByPhoneNumber(String phoneNumber, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Users> usersPage = userRepository.findByNumberContaining(phoneNumber, pageable);
+
+        return usersPage.map(user -> userMapper.toUserOutDTO(user));
     }
 }

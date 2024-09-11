@@ -1,7 +1,7 @@
 package com.nucleusteq.backend.config;
 
 import com.nucleusteq.backend.jwt.AuthTokenFilter;
-import com.nucleusteq.backend.service.UserService;
+import com.nucleusteq.backend.service.impl.UserServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,11 +23,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-public class SecurityConfig  {
+public  class SecurityConfig  {
 
 
     @Autowired
-    private UserService userService;
+    private UserServiceImpl usersServiceImp;
 
     @Autowired
     private AuthEntryPointJwt unauthorizedHandler;
@@ -40,18 +40,34 @@ public class SecurityConfig  {
     public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
+                                //Authentication
+                                .requestMatchers("/api/login").permitAll()
+                                .requestMatchers("/api/register").hasRole("ADMIN")
+                                .requestMatchers("/api/login/currentuser").permitAll()
 
-//                                .requestMatchers("/api/categories/**","/api/v1/books/**").hasRole("ADMIN")
-//                                .requestMatchers("api/issuances/**").hasRole("USER")
-
-//                                .requestMatchers("/api/**","/api/users/**").permitAll()
-//                                .requestMatchers("/api/signin").permitAll()
+                                //Category
+                                .requestMatchers("/api/categories").hasRole("ADMIN")
+                                .requestMatchers("/api/categories", "/api/categories/**").hasRole("ADMIN")
 
 
+                                //Book routes
+                                .requestMatchers("/api/books/recent").permitAll()
+                                .requestMatchers( "/api/books/**").hasRole("ADMIN")
 
-                                .anyRequest().permitAll()
 
-//                                .anyRequest().authenticated()
+                                //User routes
+                                .requestMatchers( "/api/users/**").hasRole("ADMIN")
+                                .requestMatchers( "/api/users").hasRole("ADMIN")
+
+                                //Issuance routes
+                                .requestMatchers("/api/issuances/user/**").permitAll()
+                                .requestMatchers("/api/issuances/**").hasRole("ADMIN")
+
+
+
+                                .requestMatchers("/**").permitAll()
+
+                                .anyRequest().authenticated()
                 )
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS) // Stateless session management
@@ -62,8 +78,6 @@ public class SecurityConfig  {
                 .csrf(AbstractHttpConfigurer::disable) // Disable CSRF
                 .addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class); // Add JWT filter
 
-        http.formLogin(formLoginConfig -> formLoginConfig.disable());
-
         return http.build();
     }
 
@@ -72,7 +86,7 @@ public class SecurityConfig  {
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
         authProvider.setPasswordEncoder(new BCryptPasswordEncoder(12));
-        authProvider.setUserDetailsService(userService);
+        authProvider.setUserDetailsService(usersServiceImp);
 
         return authProvider;
     }

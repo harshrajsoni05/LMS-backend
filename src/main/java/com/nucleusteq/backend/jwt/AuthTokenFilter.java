@@ -1,6 +1,6 @@
 package com.nucleusteq.backend.jwt;
 
-import com.nucleusteq.backend.service.UserService;
+import com.nucleusteq.backend.service.impl.UserServiceImpl;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,7 +22,7 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     @Autowired
     private JwtUtils jwtUtils;
     @Autowired
-    private UserService userService;
+    private UserServiceImpl userServiceImpl;
 
     private static final Logger logger = LoggerFactory.getLogger(AuthTokenFilter.class);
 
@@ -38,7 +38,7 @@ public class AuthTokenFilter extends OncePerRequestFilter {
                 String usernameOrPhoneNumber = jwtUtils.getUserNameFromJwtToken(jwt);
 
 
-                UserDetails userDetails = userService.loadUserByUsername(usernameOrPhoneNumber);
+                UserDetails userDetails = userServiceImpl.loadUserByUsername(usernameOrPhoneNumber);
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());

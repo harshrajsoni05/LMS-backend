@@ -1,84 +1,133 @@
-package com.nucleusteq.backend.service;
+package com.nucleusteq.backend.service.impl;
 
 import com.nucleusteq.backend.dto.BookDTO;
+import com.nucleusteq.backend.dto.BookOutDTO;
+import com.nucleusteq.backend.dto.ResponseDTO;
 import com.nucleusteq.backend.entity.Books;
+import com.nucleusteq.backend.entity.Category;
+import com.nucleusteq.backend.entity.Users;
+import com.nucleusteq.backend.exception.ResourceNotFoundException;
+import com.nucleusteq.backend.exception.ResourceAlreadyExistsException;
+import com.nucleusteq.backend.mapper.BookMapper;
 import com.nucleusteq.backend.repository.BookRepository;
+import com.nucleusteq.backend.repository.CategoryRepository;
+import com.nucleusteq.backend.service.IBookService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 @Service
-public class BookServiceImpl {
+public class BookServiceImpl implements IBookService {
 
     @Autowired
     private BookRepository bookRepository;
 
-    // Method to get paginated list of books
-    public Page<BookDTO> getAllBooks(Pageable pageable) {
-        return bookRepository.findAll(pageable)
-                .map(this::convertToDTO);  // Converts each Books entity to a BookDTO
+    @Autowired
+    private CategoryRepository categoryRepository;
+
+    @Override
+    public List<Books> getBooks() {
+        return bookRepository.findAll();
     }
 
-    public ResponseEntity<BookDTO> getBookById(int id) {
-        return bookRepository.findById(id)
-                .map(book -> ResponseEntity.ok(convertToDTO(book)))
-                .orElse(ResponseEntity.notFound().build());
+    @Override
+    public Page<BookOutDTO> getAllBooks(int page, int size, String search) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+        Page<Books> books;
+
+        if (search != null && !search.isEmpty()) {
+            books = bookRepository.findByTitleContainingIgnoreCaseOrAuthorContainingIgnoreCase(search, search, pageable);
+        } else {
+            books = bookRepository.findAll(pageable);
+        }
+
+        return books.map(BookMapper::mapToBookOutDTO);
     }
 
-    public ResponseEntity<BookDTO> addBook(BookDTO bookDTO) {
-        Books book = convertToEntity(bookDTO);
+    public List<BookOutDTO> getRecentBooks(int limit) {
+        return bookRepository.findAll(PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "id")))
+                .getContent()
+                .stream()
+                .map(BookMapper::mapToBookOutDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public ResponseEntity<BookOutDTO> getBookById(int id) {
+        Books book = bookRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Book", "id", String.valueOf(id)));
+
+        return ResponseEntity.ok(BookMapper.mapToBookOutDTO(book));
+    }
+
+    @Override
+    public ResponseEntity<ResponseDTO> addBook(BookDTO bookDTO) {
+
+        List<Books> booksWithSameName = bookRepository.findByTitleContainingIgnoreCase(bookDTO.getTitle());
+
+        if (!booksWithSameName.isEmpty()) {
+            throw new ResourceAlreadyExistsException("A book with the title '" + bookDTO.getTitle() + "' already exists.");
+        }
+        Books book = BookMapper.mapToBook(bookDTO, categoryRepository);
         Books savedBook = bookRepository.save(book);
-        return ResponseEntity.ok(convertToDTO(savedBook));
+
+        String message = "Book '" + book.getTitle() + "' added successfully";
+        ResponseDTO response = new ResponseDTO("success", message);
+
+        return ResponseEntity.ok(response);
     }
 
-    public ResponseEntity<BookDTO> updateBook(int id, BookDTO bookDTO) {
-        return bookRepository.findById(id)
-                .map(existingBook -> {
-                    existingBook.setTitle(bookDTO.getTitle());
-                    existingBook.setAuthor(bookDTO.getAuthor());
-                    existingBook.setCategory_id(bookDTO.getCategory_id());
-                    existingBook.setQuantity(bookDTO.getQuantity());
-                    existingBook.setImageURL(bookDTO.getImageURL());
 
-                    bookRepository.save(existingBook);
-                    return ResponseEntity.ok(convertToDTO(existingBook));
-                })
-                .orElse(ResponseEntity.notFound().build());
+    @Override
+    public ResponseEntity<ResponseDTO> updateBook(int id, BookDTO bookDTO) {
+        Books existingBook = bookRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Book", "id", String.valueOf(id)));
+
+        List<Books> booksWithSameName = bookRepository.findByTitleContainingIgnoreCase(bookDTO.getTitle());
+
+        existingBook.setTitle(bookDTO.getTitle());
+        existingBook.setAuthor(bookDTO.getAuthor());
+        existingBook.setQuantity(bookDTO.getQuantity());
+        existingBook.setImageURL(bookDTO.getImageURL());
+
+        Category category = categoryRepository.findById(bookDTO.getCategory_id())
+                .orElseThrow(() -> new ResourceNotFoundException("Category", "id", String.valueOf(bookDTO.getCategory_id())));
+        existingBook.setCategory(category);
+
+        bookRepository.save(existingBook);
+
+        String message = "Book '" + existingBook.getTitle() + "' updated successfully";
+        ResponseDTO response = new ResponseDTO("success", message);
+        return ResponseEntity.ok(response);
     }
 
-    public ResponseEntity<Object> deleteBook(int id) {
-        return bookRepository.findById(id)
-                .map(book -> {
-                    bookRepository.delete(book);
-                    return ResponseEntity.<Void>ok().build();  // Explicitly specify the type here
-                })
-                .orElse(ResponseEntity.notFound().build());
+
+    @Override
+    public ResponseEntity<ResponseDTO> deleteBook(int id) {
+        Books book = bookRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Book", "id", String.valueOf(id)));
+
+        bookRepository.delete(book);
+
+        String message = "Book '" + book.getTitle() +"'  deleted successfully!";
+        ResponseDTO response = new ResponseDTO("success",message);
+        return ResponseEntity.ok(response);
     }
 
-    // Convert Books entity to BookDTO
-    private BookDTO convertToDTO(Books book) {
-        BookDTO bookDTO = new BookDTO();
-        bookDTO.setId(book.getId());
-        bookDTO.setTitle(book.getTitle());
-        bookDTO.setAuthor(book.getAuthor());
-        bookDTO.setCategory_id(book.getCategory_id());
-        bookDTO.setQuantity(book.getQuantity());
-        bookDTO.setImageURL(book.getImageURL());
-        return bookDTO;
-    }
+    @Override
+    public List<BookOutDTO> findBookSuggestions(String query) {
+        List<Books> books = bookRepository.findByTitleContainingIgnoreCase(query);
 
-    // Convert BookDTO to Books entity
-    private Books convertToEntity(BookDTO bookDTO) {
-        Books book = new Books();
-        book.setId(bookDTO.getId());
-        book.setTitle(bookDTO.getTitle());
-        book.setAuthor(bookDTO.getAuthor());
-        book.setCategory_id(bookDTO.getCategory_id());
-        book.setQuantity(bookDTO.getQuantity());
-        book.setImageURL(bookDTO.getImageURL());
-
-        return book;
+        return books.stream()
+                .map(BookMapper::mapToBookOutDTO)
+                .collect(Collectors.toList());
     }
 }

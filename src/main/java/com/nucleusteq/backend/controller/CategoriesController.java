@@ -2,7 +2,8 @@ package com.nucleusteq.backend.controller;
 
 import com.nucleusteq.backend.dto.BookDTO;
 import com.nucleusteq.backend.dto.CategoryDTO;
-import com.nucleusteq.backend.service.CategoryService;
+import com.nucleusteq.backend.dto.ResponseDTO;
+import com.nucleusteq.backend.service.impl.CategoryServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -18,11 +19,19 @@ import java.util.List;
 public class CategoriesController {
 
     @Autowired
-    private CategoryService categoryService;
+    private CategoryServiceImpl categoryService;
+
+    @GetMapping("/all")
+    public ResponseEntity<List<CategoryDTO>> getCategories() {
+        List<CategoryDTO> categories = categoryService.getCategories();
+        return ResponseEntity.ok(categories);
+    }
 
     @GetMapping
-    public Page<CategoryDTO> getAllCategories(Pageable pageable) {
-        return categoryService.getAllCategories(pageable);
+    public Page<CategoryDTO> getAllCategories(@RequestParam(defaultValue = "0") int page,
+                                     @RequestParam(defaultValue = "7") int size,
+                                     @RequestParam(required = false) String search) {
+        return categoryService.getAllCategories(page, size, search);
     }
 
     @GetMapping("/{id}")
@@ -31,17 +40,19 @@ public class CategoriesController {
     }
 
     @PostMapping
-    public ResponseEntity<CategoryDTO> addCategory(@RequestBody CategoryDTO categoryDTO) {
+    public ResponseEntity<ResponseDTO> addCategory(@RequestBody CategoryDTO categoryDTO) {
         return categoryService.addCategory(categoryDTO);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<CategoryDTO> updateCategory(@PathVariable int id, @RequestBody CategoryDTO categoryDTO) {
+    public ResponseEntity<ResponseDTO> updateCategory(@PathVariable int id, @RequestBody CategoryDTO categoryDTO) {
         return categoryService.updateCategory(id, categoryDTO);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Object> deleteCategory(@PathVariable int id) {
+    public ResponseEntity<ResponseDTO> deleteCategory(@PathVariable int id) {
         return categoryService.deleteCategory(id);
     }
+
+
 }

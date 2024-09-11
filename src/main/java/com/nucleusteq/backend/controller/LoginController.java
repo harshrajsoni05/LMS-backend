@@ -1,10 +1,14 @@
 package com.nucleusteq.backend.controller;
 
 import com.nucleusteq.backend.dto.LoginDTO;
+import com.nucleusteq.backend.dto.UserDTO;
+import com.nucleusteq.backend.dto.UserOutDTO;
 import com.nucleusteq.backend.entity.Users;
 import com.nucleusteq.backend.jwt.JwtUtils;
 import com.nucleusteq.backend.jwt.LoginResponse;
-import com.nucleusteq.backend.service.UserService;
+import com.nucleusteq.backend.mapper.UserMapper;
+import com.nucleusteq.backend.service.IUserService;
+import com.nucleusteq.backend.service.impl.UserServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,94 +19,76 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
-
 @RestController
-@RequestMapping(value = "/auth")
+@RequestMapping("/api")
 public class LoginController {
-
-
 
     @Autowired
     private JwtUtils jwtUtils;
 
     @Autowired
-    UserService userService;
+    private UserServiceImpl userService;
 
     @Autowired
     private AuthenticationManager authenticationManager;
 
+    @Autowired
+    private UserMapper userMapper;
 
     @CrossOrigin
-    @PostMapping("/signin")
+    @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@RequestBody LoginDTO loginDTO) {
-
-        Authentication authentication;
-
         try {
+            String decodedPassword = decodeBase64(loginDTO.getPassword());
 
-            System.out.println("In Comtroller");
+            Authentication authentication = authenticate(loginDTO.getUsernameOrPhoneNumber(), decodedPassword);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            if(isEmail(loginDTO.getUsernameOrPhoneNumber()))
-            {
-                authentication = authenticationManager
-                        .authenticate(new UsernamePasswordAuthenticationToken(loginDTO.getUsernameOrPhoneNumber(),loginDTO.getPassword()));
-            } else if (isPhoneNumber(loginDTO.getUsernameOrPhoneNumber())) {
+            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+            Users user = userService.getByUserName(userDetails.getUsername());
 
-                authentication = authenticationManager.authenticate(
-                        new UsernamePasswordAuthenticationToken(
-                                loginDTO.getUsernameOrPhoneNumber(),
-                                loginDTO.getPassword()
-                        )
-                );
-            }else {
+            String jwtToken = jwtUtils.generateTokenFromUsername(userDetails);
+            LoginResponse response = new LoginResponse(jwtToken, userDetails.getUsername(), user.getRole(), user.getId() ,user.getName());
 
-                throw new Exception("Invalid login input format.");
+            return ResponseEntity.ok(response);
 
-            }
-
-
-        }catch (Exception e ) {
-
-            Map<String,Object> map =  new HashMap<>();
-            map.put("Messsage", "Bad credentials");
-            map.put("status",false);
-            return  new ResponseEntity<Object>(map, HttpStatus.NOT_FOUND);
-
-
-
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("message", "Invalid credentials");
+            errorResponse.put("status", false);
+            return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
         }
-
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-
-        String username = userDetails.getUsername();
-
-        Users user = userService.getByUserName(username);
-
-        String jwtToken = jwtUtils.generateTokenFromUsername(userDetails);
-
-        System.out.println(jwtToken);
-        LoginResponse response = new LoginResponse(jwtToken,userDetails.getUsername(), "ROLE_"+user.getRole(), user.getId());
-
-        return ResponseEntity.ok(response);
-
     }
 
-
-
-
-    private boolean isEmail(String input) {
-        // Basic email validation logic
-        return input != null && input.contains("@");
+    private Authentication authenticate(String usernameOrPhoneNumber, String password) throws Exception {
+        return authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(usernameOrPhoneNumber, password)
+        );
     }
 
-    private boolean isPhoneNumber(String input) {
-        // Basic phone number validation logic
-        return input != null && input.matches("\\d+"); // Simple check for numeric values
+    private String decodeBase64(String encodedPassword) {
+        return new String(Base64.getDecoder().decode(encodedPassword), StandardCharsets.UTF_8);
     }
 
+    @GetMapping("/currentUser")
+    public ResponseEntity<LoginResponse> currentUser(@RequestHeader("Authorization") String token) {
+        String jwtToken = token.replace("Bearer ", "");
+        String userName = jwtUtils.getUserNameFromJwtToken(jwtToken);
+        Users user = userService.getByUserName(userName);
+
+        LoginResponse loginResponse = new LoginResponse(
+                jwtToken,
+                user.getEmail(),
+                user.getRole(),
+                user.getId(),
+                user.getName()
+        );
+
+        return ResponseEntity.status(HttpStatus.OK).body(loginResponse);
+    }
 }
