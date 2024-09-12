@@ -142,7 +142,6 @@ public class IssuanceServiceImpl implements IIssuanceService {
                     Books book = bookRepository.findById(issuance.getBook_id())
                             .orElseThrow(() -> new ResourceNotFoundException("Book", "id", String.valueOf(issuance.getBook_id())));
 
-                    book.setQuantity(book.getQuantity() + 1);
                     bookRepository.save(book);
 
                     issuanceRepository.delete(issuance);
