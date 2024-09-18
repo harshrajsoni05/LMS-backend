@@ -96,8 +96,7 @@ public class IssuanceServiceImpl implements IIssuanceService {
                 returnDate);
 
         if (issuance.getIssuance_type().equals("In House")) {
-            System.out.println("message for Issuance" + message);
-//            ismsService.sendSms(issuance.getUser().getNumber(), message);
+            ismsService.sendSms(issuance.getUser().getNumber(), message);
         }
 
         String responseMessage = "Issuance added successfully for user '" + user.getName() + "' with book '" + book.getTitle() + "'";

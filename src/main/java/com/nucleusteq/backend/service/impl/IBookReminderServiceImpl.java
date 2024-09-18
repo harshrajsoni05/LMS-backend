@@ -21,6 +21,7 @@ public class IBookReminderServiceImpl implements IBookReminderService {
 
 
     @Override
+//    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Kolkata") // Every day at 00:00 (midnight)
     @Scheduled(cron = "0 * * * * *", zone = "Asia/Kolkata")
     public void sendReturnReminder() {
         LocalDateTime startOfTomorrow = LocalDateTime.now().plusDays(1).toLocalDate().atStartOfDay();
@@ -36,8 +37,8 @@ public class IBookReminderServiceImpl implements IBookReminderService {
                     issuance.getBook().getTitle(), issuance.getBook().getAuthor(),
                     issuance.getReturn_date().toLocalDateTime().toLocalDate().toString());
 
-            System.out.println(message);
-//            ismsService.sendSms(issuance.getUser().getNumber(), message);
+//            System.out.println(message);
+            ismsService.sendSms(issuance.getUser().getNumber(), message);
         }
     }
 }
