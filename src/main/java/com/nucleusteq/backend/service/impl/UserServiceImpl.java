@@ -110,7 +110,7 @@ public class UserServiceImpl implements IUserService, UserDetailsService {
                 randomPassword);
 
         System.out.println("SMS from Registration " +message);
-        // ismsService.sendSms(savedUser.getNumber(), message);
+//         ismsService.sendSms(savedUser.getNumber(), message);
 
         String ResponseMessage = "User '" + savedUser.getName() + "' registered successfully";
         ResponseDTO response = new ResponseDTO("success", ResponseMessage);

@@ -28,6 +28,8 @@ public interface IssuanceRepository extends JpaRepository<Issuance, Integer> {
             "OR LOWER(b.title) LIKE LOWER(CONCAT('%', :search, '%'))")
     Page<Issuance> findByUserNameOrBookTitle(@Param("search") String search, Pageable pageable);
 
+    @Query("SELECT COUNT(i) FROM Issuance i WHERE i.status = 'Issued'")
+    long countIssuedIssuances();
 
     @Query("SELECT i FROM Issuance i WHERE i.return_date BETWEEN :startOfTomorrow AND :endOfTomorrow AND i.status = :status")
     List<Issuance> findIssuancesByReturnDateBetweenAndStatus(

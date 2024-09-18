@@ -29,19 +29,12 @@ public class DashboardServiceImpl implements IDashboardService {
 
     @Override
     public CountsDTO getDashboardCounts() {
-        // Retrieve all books
-        List<Books> books = bookRepository.findAll();
 
-        int totalBooks = books.stream()
-                .mapToInt(Books::getQuantity)
-                .sum();
-
-        // Retrieve counts for categories, issuances, and users
+        int totalBooks = (int) bookRepository.count();
         int categoriesCount = (int) categoryRepository.count();
-        int issuancesCount = (int) issuanceRepository.count();
+        int issuancesCount = (int) issuanceRepository.countIssuedIssuances();
         int usersCount = (int) userRepository.count();
 
-        // Create and return the CountsDTO with the calculated values
         return new CountsDTO(totalBooks, categoriesCount, issuancesCount, usersCount);
     }
 }
