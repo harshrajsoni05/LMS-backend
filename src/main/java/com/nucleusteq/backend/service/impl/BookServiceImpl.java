@@ -88,10 +88,16 @@ public class BookServiceImpl implements IBookService {
 
     @Override
     public ResponseEntity<ResponseDTO> updateBook(int id, BookDTO bookDTO) {
+        List<Books> booksWithSameName = bookRepository.findByTitleContainingIgnoreCase(bookDTO.getTitle());
+
+        for (Books book : booksWithSameName) {
+            if (book.getId() != id) {
+                throw new ResourceAlreadyExistsException("A book with the title '" + bookDTO.getTitle() + "' already exists.");
+            }
+        }
+
         Books existingBook = bookRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Book", "id", String.valueOf(id)));
-
-        List<Books> booksWithSameName = bookRepository.findByTitleContainingIgnoreCase(bookDTO.getTitle());
 
         existingBook.setTitle(bookDTO.getTitle());
         existingBook.setAuthor(bookDTO.getAuthor());

@@ -109,7 +109,7 @@ public class UserServiceImpl implements IUserService, UserDetailsService {
                 savedUser.getEmail(),
                 randomPassword);
 
-         ismsService.sendSms(savedUser.getNumber(), message);
+        ismsService.sendSms(savedUser.getNumber(), message);
 
         String ResponseMessage = "User '" + savedUser.getName() + "' registered successfully";
         ResponseDTO response = new ResponseDTO("success", ResponseMessage);
@@ -119,9 +119,19 @@ public class UserServiceImpl implements IUserService, UserDetailsService {
 
     @Override
     public ResponseEntity<ResponseDTO> updateUser(int id, UserDTO userDTO) {
+
+        Optional<Users> userWithSameNumber = userRepository.findByNumber(userDTO.getNumber());
+        if (userWithSameNumber.isPresent() && userWithSameNumber.get().getId() != id) {
+            throw new ResourceAlreadyExistsException("User with this phone number already exists.");
+        }
+
+        Optional<Users> userWithSameEmail = userRepository.findByEmail(userDTO.getEmail());
+        if (userWithSameEmail.isPresent() && userWithSameEmail.get().getId() != id) {
+            throw new ResourceAlreadyExistsException("User with this email already exists.");
+        }
+
         Users existingUser = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "ID", String.valueOf(id)));
-
 
         existingUser.setName(userDTO.getName());
         existingUser.setNumber(userDTO.getNumber());
@@ -136,7 +146,6 @@ public class UserServiceImpl implements IUserService, UserDetailsService {
 
         String message = "User '" + existingUser.getName() + "' updated successfully";
         ResponseDTO response = new ResponseDTO("success", message);
-
         return ResponseEntity.ok(response);
     }
 

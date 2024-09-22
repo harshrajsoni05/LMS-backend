@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -74,17 +75,26 @@ public class CategoryServiceImpl implements ICategoryService {
 
     @Override
     public ResponseEntity<ResponseDTO> updateCategory(int id, CategoryDTO categoryDTO) {
+        Optional<Category> categoryWithSameName = categoryRepository.findByNameContainingIgnoreCase(categoryDTO.getName());
+
+        if (categoryWithSameName.isPresent() && categoryWithSameName.get().getId() != id) {
+            throw new ResourceAlreadyExistsException("Category with name '" + categoryDTO.getName() + "' already exists.");
+        }
+
         Category existingCategory = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", "id", String.valueOf(id)));
 
         existingCategory.setName(categoryDTO.getName());
         existingCategory.setDescription(categoryDTO.getDescription());
+
         Category updatedCategory = categoryRepository.save(existingCategory);
 
         String message = "Category '" + existingCategory.getName() + "' updated successfully";
         ResponseDTO response = new ResponseDTO("success", message);
 
-        return ResponseEntity.ok(response);    }
+        return ResponseEntity.ok(response);
+    }
+
 
     @Override
     public ResponseEntity<ResponseDTO> deleteCategory(int id) {

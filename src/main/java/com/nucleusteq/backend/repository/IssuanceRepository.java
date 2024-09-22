@@ -21,9 +21,7 @@ public interface IssuanceRepository extends JpaRepository<Issuance, Integer> {
 
     boolean existsByBookCategoryIdAndStatus(int categoryId, String status);
 
-    @Query("SELECT i FROM Issuance i " +
-            "JOIN i.user u " +
-            "JOIN i.book b " +
+    @Query("SELECT i FROM Issuance i " + "JOIN i.user u " + "JOIN i.book b " +
             "WHERE LOWER(u.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
             "OR LOWER(b.title) LIKE LOWER(CONCAT('%', :search, '%'))")
     Page<Issuance> findByUserNameOrBookTitle(@Param("search") String search, Pageable pageable);
@@ -37,4 +35,5 @@ public interface IssuanceRepository extends JpaRepository<Issuance, Integer> {
             @Param("endOfTomorrow") LocalDateTime endOfTomorrow,
             @Param("status") String status
     );
+    
 }
