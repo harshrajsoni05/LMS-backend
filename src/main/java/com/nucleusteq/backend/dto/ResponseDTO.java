@@ -7,7 +7,6 @@ import lombok.*;
 public class ResponseDTO {
 
     private String status;
-
     private String message;
 
 }

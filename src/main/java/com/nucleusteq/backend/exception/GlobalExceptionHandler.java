@@ -22,20 +22,7 @@ import java.util.Map;
 @ControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
-    @Override
-    protected ResponseEntity<Object> handleMethodArgumentNotValid(
-            MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        Map<String, String> validationErrors = new HashMap<>();
-        List<ObjectError> validationErrorList = ex.getBindingResult().getAllErrors();
 
-        validationErrorList.forEach((error) -> {
-            String fieldName = ((FieldError) error).getField();
-            String validationMsg = error.getDefaultMessage();
-            validationErrors.put(fieldName, validationMsg);
-        });
-
-        return new ResponseEntity<>(validationErrors, HttpStatus.BAD_REQUEST);
-    }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ResponseDTO> handleGlobalException(Exception exception,
@@ -86,7 +73,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         if (detailedMessage.contains("issuances_user_id_fkey")) {
             ResponseDTO errorResponseDto = new ResponseDTO(
                     HttpStatus.CONFLICT.toString(),
-                    "Cannot delete user. The user is referenced by Issuances."
+                    "Cannot delete user. The user has Issuance."
             );
             return new ResponseEntity<>(errorResponseDto, HttpStatus.CONFLICT);
         }
@@ -106,11 +93,5 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
         return new ResponseEntity<>(errorResponseDto, HttpStatus.CONFLICT);
     }
-
-
-
-
-
-
 
 }
